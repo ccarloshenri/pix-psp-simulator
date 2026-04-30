@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"hash/fnv"
 	"sync"
 	"time"
 
@@ -9,26 +10,42 @@ import (
 	"pix-psp-simulator/src/layers/main/models"
 )
 
-type PixRepository struct {
+type pixShard struct {
 	mu   sync.RWMutex
 	data map[string]models.Pix
 }
 
+type PixRepository struct {
+	shards [numShards]pixShard
+}
+
 func NewPixRepository() *PixRepository {
-	return &PixRepository{data: make(map[string]models.Pix)}
+	r := &PixRepository{}
+	for i := range r.shards {
+		r.shards[i].data = make(map[string]models.Pix)
+	}
+	return r
+}
+
+func (r *PixRepository) shard(key string) *pixShard {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return &r.shards[h.Sum32()%numShards]
 }
 
 func (r *PixRepository) Save(pix models.Pix) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[pix.EndToEndID] = pix
+	s := r.shard(pix.EndToEndID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[pix.EndToEndID] = pix
 	return nil
 }
 
 func (r *PixRepository) FindByE2EID(e2eid string) (*models.Pix, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	pix, ok := r.data[e2eid]
+	s := r.shard(e2eid)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pix, ok := s.data[e2eid]
 	if !ok {
 		return nil, nil
 	}
@@ -36,21 +53,21 @@ func (r *PixRepository) FindByE2EID(e2eid string) (*models.Pix, error) {
 }
 
 func (r *PixRepository) FindByTxID(txid string) ([]models.Pix, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	var result []models.Pix
-	for _, pix := range r.data {
-		if pix.TxID == txid {
-			result = append(result, pix)
+	for i := range r.shards {
+		s := &r.shards[i]
+		s.mu.RLock()
+		for _, pix := range s.data {
+			if pix.TxID == txid {
+				result = append(result, pix)
+			}
 		}
+		s.mu.RUnlock()
 	}
 	return result, nil
 }
 
 func (r *PixRepository) FindAll(filters interfaces.PixFilters) ([]models.Pix, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	var inicio, fim time.Time
 	if filters.Inicio != "" {
 		parsed, err := time.Parse(time.RFC3339, filters.Inicio)
@@ -68,44 +85,51 @@ func (r *PixRepository) FindAll(filters interfaces.PixFilters) ([]models.Pix, er
 	}
 
 	var result []models.Pix
-	for _, pix := range r.data {
-		if filters.TxID != "" && pix.TxID != filters.TxID {
-			continue
+	for i := range r.shards {
+		s := &r.shards[i]
+		s.mu.RLock()
+		for _, pix := range s.data {
+			if filters.TxID != "" && pix.TxID != filters.TxID {
+				continue
+			}
+			if !inicio.IsZero() && pix.Horario.Before(inicio) {
+				continue
+			}
+			if !fim.IsZero() && pix.Horario.After(fim) {
+				continue
+			}
+			result = append(result, pix)
 		}
-		if !inicio.IsZero() && pix.Horario.Before(inicio) {
-			continue
-		}
-		if !fim.IsZero() && pix.Horario.After(fim) {
-			continue
-		}
-		result = append(result, pix)
+		s.mu.RUnlock()
 	}
 	return result, nil
 }
 
 func (r *PixRepository) AddDevolucao(e2eid string, dev models.Devolucao) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	pix, ok := r.data[e2eid]
+	s := r.shard(e2eid)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pix, ok := s.data[e2eid]
 	if !ok {
 		return fmt.Errorf("pagamento não encontrado")
 	}
 	pix.Devolucoes = append(pix.Devolucoes, dev)
-	r.data[e2eid] = pix
+	s.data[e2eid] = pix
 	return nil
 }
 
 func (r *PixRepository) UpdateDevolucao(e2eid string, dev models.Devolucao) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	pix, ok := r.data[e2eid]
+	s := r.shard(e2eid)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pix, ok := s.data[e2eid]
 	if !ok {
 		return fmt.Errorf("pagamento não encontrado")
 	}
 	for i, d := range pix.Devolucoes {
 		if d.ID == dev.ID {
 			pix.Devolucoes[i] = dev
-			r.data[e2eid] = pix
+			s.data[e2eid] = pix
 			return nil
 		}
 	}
@@ -113,9 +137,10 @@ func (r *PixRepository) UpdateDevolucao(e2eid string, dev models.Devolucao) erro
 }
 
 func (r *PixRepository) FindDevolucao(e2eid, devID string) (*models.Devolucao, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	pix, ok := r.data[e2eid]
+	s := r.shard(e2eid)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	pix, ok := s.data[e2eid]
 	if !ok {
 		return nil, nil
 	}

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"hash/fnv"
 	"sync"
 	"time"
 
@@ -9,26 +10,42 @@ import (
 	"pix-psp-simulator/src/layers/main/models"
 )
 
-type CobVRepository struct {
+type cobvShard struct {
 	mu   sync.RWMutex
 	data map[string]models.CobV
 }
 
+type CobVRepository struct {
+	shards [numShards]cobvShard
+}
+
 func NewCobVRepository() *CobVRepository {
-	return &CobVRepository{data: make(map[string]models.CobV)}
+	r := &CobVRepository{}
+	for i := range r.shards {
+		r.shards[i].data = make(map[string]models.CobV)
+	}
+	return r
+}
+
+func (r *CobVRepository) shard(key string) *cobvShard {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return &r.shards[h.Sum32()%numShards]
 }
 
 func (r *CobVRepository) Save(cobv models.CobV) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[cobv.TxID] = cobv
+	s := r.shard(cobv.TxID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[cobv.TxID] = cobv
 	return nil
 }
 
 func (r *CobVRepository) FindByTxID(txid string) (*models.CobV, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	cobv, ok := r.data[txid]
+	s := r.shard(txid)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cobv, ok := s.data[txid]
 	if !ok {
 		return nil, nil
 	}
@@ -36,19 +53,17 @@ func (r *CobVRepository) FindByTxID(txid string) (*models.CobV, error) {
 }
 
 func (r *CobVRepository) Update(cobv models.CobV) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.data[cobv.TxID]; !ok {
+	s := r.shard(cobv.TxID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[cobv.TxID]; !ok {
 		return fmt.Errorf("cobrança com vencimento não encontrada")
 	}
-	r.data[cobv.TxID] = cobv
+	s.data[cobv.TxID] = cobv
 	return nil
 }
 
 func (r *CobVRepository) FindAll(filters interfaces.CobVFilters) ([]models.CobV, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	var inicio, fim time.Time
 	if filters.Inicio != "" {
 		inicio, _ = time.Parse(time.RFC3339, filters.Inicio)
@@ -58,20 +73,25 @@ func (r *CobVRepository) FindAll(filters interfaces.CobVFilters) ([]models.CobV,
 	}
 
 	result := make([]models.CobV, 0)
-	for _, cobv := range r.data {
-		if filters.Status != "" && cobv.Status != filters.Status {
-			continue
+	for i := range r.shards {
+		s := &r.shards[i]
+		s.mu.RLock()
+		for _, cobv := range s.data {
+			if filters.Status != "" && cobv.Status != filters.Status {
+				continue
+			}
+			if filters.DataDeVencimento != "" && cobv.Calendario.DataDeVencimento != filters.DataDeVencimento {
+				continue
+			}
+			if !inicio.IsZero() && cobv.Calendario.Criacao.Before(inicio) {
+				continue
+			}
+			if !fim.IsZero() && cobv.Calendario.Criacao.After(fim) {
+				continue
+			}
+			result = append(result, cobv)
 		}
-		if filters.DataDeVencimento != "" && cobv.Calendario.DataDeVencimento != filters.DataDeVencimento {
-			continue
-		}
-		if !inicio.IsZero() && cobv.Calendario.Criacao.Before(inicio) {
-			continue
-		}
-		if !fim.IsZero() && cobv.Calendario.Criacao.After(fim) {
-			continue
-		}
-		result = append(result, cobv)
+		s.mu.RUnlock()
 	}
 	return result, nil
 }

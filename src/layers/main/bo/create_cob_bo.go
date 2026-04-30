@@ -39,11 +39,11 @@ func (b *CreateCobBO) Execute(input CreateCobInput) (*CreateCobOutput, error) {
 	txid := input.TxID
 	if txid == "" {
 		txid = b.gen.GenerateTxID()
-	}
-
-	existing, _ := b.repo.FindByTxID(txid)
-	if existing != nil {
-		return nil, fmt.Errorf("cobrança com txid %s já existe", txid)
+	} else {
+		existing, _ := b.repo.FindByTxID(txid)
+		if existing != nil {
+			return nil, fmt.Errorf("cobrança com txid %s já existe", txid)
+		}
 	}
 
 	expiracao := input.Expiracao
