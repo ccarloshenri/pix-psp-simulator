@@ -27,32 +27,22 @@ Each layer has a single responsibility: controllers parse HTTP, processors valid
 |--------|------|-------------|
 | `POST` | `/cob` | Create charge (auto-generated txid) |
 | `PUT` | `/cob/{txid}` | Create charge with explicit txid |
-| `GET` | `/cob/{txid}` | Get charge |
+| `GET` | `/cob` | List charges (filters: `status`, `inicio`, `fim`) |
+| `GET` | `/cob/{txid}` | Get charge by txid |
 | `PATCH` | `/cob/{txid}` | Update charge value/expiration |
 | `DELETE` | `/cob/{txid}` | Cancel charge |
+| `POST` | `/cob/simulate` | Simulate a PIX payment for a txid |
+| `PUT` | `/cob/{e2eid}/devolucao/{id}` | Create refund on a received payment |
+| `GET` | `/cob/{e2eid}/devolucao/{id}` | Get refund |
 
 ### CobV (Charge with Due Date)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `PUT` | `/cobv/{txid}` | Create charge with due date |
-| `GET` | `/cobv/{txid}` | Get charge |
+| `GET` | `/cobv` | List charges (filters: `status`, `dataDeVencimento`, `inicio`, `fim`) |
+| `GET` | `/cobv/{txid}` | Get charge by txid |
 | `PATCH` | `/cobv/{txid}` | Update charge |
-
-### Pix (Payments)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/pix/simulate` | Simulate a PIX payment for a txid |
-| `GET` | `/pix/{e2eid}` | Get payment by EndToEndID |
-| `GET` | `/pix` | List payments (filters: `txid`, `inicio`, `fim`) |
-
-### Devolução (Refund)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `PUT` | `/pix/{e2eid}/devolucao/{id}` | Create refund |
-| `GET` | `/pix/{e2eid}/devolucao/{id}` | Get refund |
 
 ---
 
@@ -112,44 +102,38 @@ curl -s -X PUT http://localhost:8080/cobv/cobvtxid001 \
   }' | jq .
 ```
 
-### 6. Simulate a PIX payment
+### 6. List charges
+
+```bash
+# All charges
+curl -s "http://localhost:8080/cob" | jq .
+
+# Filter by status
+curl -s "http://localhost:8080/cob?status=ATIVA" | jq .
+
+# Filter by date range (RFC3339)
+curl -s "http://localhost:8080/cob?inicio=2025-01-01T00:00:00Z&fim=2025-12-31T23:59:59Z" | jq .
+```
+
+### 7. Simulate a PIX payment
 
 ```bash
 # Use the txid from a previously created cob/cobv
-curl -s -X POST http://localhost:8080/pix/simulate \
+curl -s -X POST http://localhost:8080/cob/simulate \
   -H "Content-Type: application/json" \
   -d '{
     "txid": "mytxid123",
     "valor": "100.00",
     "infopagador": "Pagamento referente a fatura"
   }' | jq .
+# Response includes the endToEndId of the received payment
 ```
 
-### 7. Get payment by EndToEndID
+### 8. Create a refund
 
 ```bash
 # Use the endToEndId returned by the simulate endpoint
-curl -s http://localhost:8080/pix/E607469482025010112345678901 | jq .
-```
-
-### 8. List payments
-
-```bash
-# All payments
-curl -s "http://localhost:8080/pix" | jq .
-
-# Filter by txid
-curl -s "http://localhost:8080/pix?txid=mytxid123" | jq .
-
-# Filter by date range (RFC3339)
-curl -s "http://localhost:8080/pix?inicio=2025-01-01T00:00:00Z&fim=2025-12-31T23:59:59Z" | jq .
-```
-
-### 9. Create a refund
-
-```bash
-# Use the endToEndId from the payment
-curl -s -X PUT http://localhost:8080/pix/E607469482025010112345678901/devolucao/dev001 \
+curl -s -X PUT http://localhost:8080/cob/E607469482025010112345678901/devolucao/dev001 \
   -H "Content-Type: application/json" \
   -d '{
     "valor": "50.00",
@@ -158,10 +142,17 @@ curl -s -X PUT http://localhost:8080/pix/E607469482025010112345678901/devolucao/
   }' | jq .
 ```
 
-### 10. Get a refund
+### 9. Get a refund
 
 ```bash
-curl -s http://localhost:8080/pix/E607469482025010112345678901/devolucao/dev001 | jq .
+curl -s http://localhost:8080/cob/E607469482025010112345678901/devolucao/dev001 | jq .
+```
+
+### 10. List cobv charges
+
+```bash
+curl -s "http://localhost:8080/cobv" | jq .
+curl -s "http://localhost:8080/cobv?dataDeVencimento=2025-12-31" | jq .
 ```
 
 ### 11. Cancel a charge

@@ -3,7 +3,9 @@ package memory
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"pix-psp-simulator/src/layers/main/interfaces"
 	"pix-psp-simulator/src/layers/main/models"
 )
 
@@ -41,4 +43,35 @@ func (r *CobVRepository) Update(cobv models.CobV) error {
 	}
 	r.data[cobv.TxID] = cobv
 	return nil
+}
+
+func (r *CobVRepository) FindAll(filters interfaces.CobVFilters) ([]models.CobV, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var inicio, fim time.Time
+	if filters.Inicio != "" {
+		inicio, _ = time.Parse(time.RFC3339, filters.Inicio)
+	}
+	if filters.Fim != "" {
+		fim, _ = time.Parse(time.RFC3339, filters.Fim)
+	}
+
+	result := make([]models.CobV, 0)
+	for _, cobv := range r.data {
+		if filters.Status != "" && cobv.Status != filters.Status {
+			continue
+		}
+		if filters.DataDeVencimento != "" && cobv.Calendario.DataDeVencimento != filters.DataDeVencimento {
+			continue
+		}
+		if !inicio.IsZero() && cobv.Calendario.Criacao.Before(inicio) {
+			continue
+		}
+		if !fim.IsZero() && cobv.Calendario.Criacao.After(fim) {
+			continue
+		}
+		result = append(result, cobv)
+	}
+	return result, nil
 }

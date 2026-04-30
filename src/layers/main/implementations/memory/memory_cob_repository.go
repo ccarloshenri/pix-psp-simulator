@@ -3,7 +3,9 @@ package memory
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"pix-psp-simulator/src/layers/main/interfaces"
 	"pix-psp-simulator/src/layers/main/models"
 )
 
@@ -51,4 +53,32 @@ func (r *CobRepository) Delete(txid string) error {
 	}
 	delete(r.data, txid)
 	return nil
+}
+
+func (r *CobRepository) FindAll(filters interfaces.CobFilters) ([]models.Cob, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var inicio, fim time.Time
+	if filters.Inicio != "" {
+		inicio, _ = time.Parse(time.RFC3339, filters.Inicio)
+	}
+	if filters.Fim != "" {
+		fim, _ = time.Parse(time.RFC3339, filters.Fim)
+	}
+
+	result := make([]models.Cob, 0)
+	for _, cob := range r.data {
+		if filters.Status != "" && cob.Status != filters.Status {
+			continue
+		}
+		if !inicio.IsZero() && cob.Calendario.Criacao.Before(inicio) {
+			continue
+		}
+		if !fim.IsZero() && cob.Calendario.Criacao.After(fim) {
+			continue
+		}
+		result = append(result, cob)
+	}
+	return result, nil
 }

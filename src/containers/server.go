@@ -30,62 +30,63 @@ func NewServer(cfg Config) *Server {
 	// BOs
 	createCobBO := bo.NewCreateCobBO(cobRepo, gen)
 	getCobBO := bo.NewGetCobBO(cobRepo)
+	listCobBO := bo.NewListCobBO(cobRepo)
 	updateCobBO := bo.NewUpdateCobBO(cobRepo)
 	deleteCobBO := bo.NewDeleteCobBO(cobRepo)
 	createCobVBO := bo.NewCreateCobVBO(cobvRepo, gen)
 	getCobVBO := bo.NewGetCobVBO(cobvRepo)
+	listCobVBO := bo.NewListCobVBO(cobvRepo)
 	updateCobVBO := bo.NewUpdateCobVBO(cobvRepo)
 	simulatePayBO := bo.NewSimulatePaymentBO(cobRepo, cobvRepo, pixRepo, gen)
-	getPixBO := bo.NewGetPixBO(pixRepo)
-	listPixBO := bo.NewListPixBO(pixRepo)
 	createDevBO := bo.NewCreateDevolucaoBO(pixRepo, gen)
 	getDevBO := bo.NewGetDevolucaoBO(pixRepo)
 
 	// Processors
 	createCobProc := processor.NewCreateCobProcessor(createCobBO)
 	getCobProc := processor.NewGetCobProcessor(getCobBO)
+	listCobProc := processor.NewListCobProcessor(listCobBO)
 	updateCobProc := processor.NewUpdateCobProcessor(updateCobBO)
 	deleteCobProc := processor.NewDeleteCobProcessor(deleteCobBO)
 	createCobVProc := processor.NewCreateCobVProcessor(createCobVBO)
 	getCobVProc := processor.NewGetCobVProcessor(getCobVBO)
+	listCobVProc := processor.NewListCobVProcessor(listCobVBO)
 	updateCobVProc := processor.NewUpdateCobVProcessor(updateCobVBO)
 	simPayProc := processor.NewSimulatePaymentProcessor(simulatePayBO)
-	getPixProc := processor.NewGetPixProcessor(getPixBO)
-	listPixProc := processor.NewListPixProcessor(listPixBO)
 	createDevProc := processor.NewCreateDevolucaoProcessor(createDevBO)
 	getDevProc := processor.NewGetDevolucaoProcessor(getDevBO)
 
 	// Controllers
 	createCobCtrl := controller.NewCreateCobController(createCobProc)
 	getCobCtrl := controller.NewGetCobController(getCobProc)
+	listCobCtrl := controller.NewListCobController(listCobProc)
 	updateCobCtrl := controller.NewUpdateCobController(updateCobProc)
 	deleteCobCtrl := controller.NewDeleteCobController(deleteCobProc)
 	createCobVCtrl := controller.NewCreateCobVController(createCobVProc)
 	getCobVCtrl := controller.NewGetCobVController(getCobVProc)
+	listCobVCtrl := controller.NewListCobVController(listCobVProc)
 	updateCobVCtrl := controller.NewUpdateCobVController(updateCobVProc)
 	simPayCtrl := controller.NewSimulatePaymentController(simPayProc)
-	getPixCtrl := controller.NewGetPixController(getPixProc)
-	listPixCtrl := controller.NewListPixController(listPixProc)
 	createDevCtrl := controller.NewCreateDevolucaoController(createDevProc)
 	getDevCtrl := controller.NewGetDevolucaoController(getDevProc)
 
-	// Routes
+	// Routes — cob (immediate charge)
 	s.mux.HandleFunc("POST /cob", createCobCtrl.Handle)
 	s.mux.HandleFunc("PUT /cob/{txid}", createCobCtrl.Handle)
+	s.mux.HandleFunc("GET /cob", listCobCtrl.Handle)
 	s.mux.HandleFunc("GET /cob/{txid}", getCobCtrl.Handle)
 	s.mux.HandleFunc("PATCH /cob/{txid}", updateCobCtrl.Handle)
 	s.mux.HandleFunc("DELETE /cob/{txid}", deleteCobCtrl.Handle)
 
+	// Routes — cobv (charge with due date)
 	s.mux.HandleFunc("PUT /cobv/{txid}", createCobVCtrl.Handle)
+	s.mux.HandleFunc("GET /cobv", listCobVCtrl.Handle)
 	s.mux.HandleFunc("GET /cobv/{txid}", getCobVCtrl.Handle)
 	s.mux.HandleFunc("PATCH /cobv/{txid}", updateCobVCtrl.Handle)
 
-	s.mux.HandleFunc("POST /pix/simulate", simPayCtrl.Handle)
-	s.mux.HandleFunc("GET /pix/{e2eid}", getPixCtrl.Handle)
-	s.mux.HandleFunc("GET /pix", listPixCtrl.Handle)
-
-	s.mux.HandleFunc("PUT /pix/{e2eid}/devolucao/{id}", createDevCtrl.Handle)
-	s.mux.HandleFunc("GET /pix/{e2eid}/devolucao/{id}", getDevCtrl.Handle)
+	// Routes — simulate payment and refunds
+	s.mux.HandleFunc("POST /cob/simulate", simPayCtrl.Handle)
+	s.mux.HandleFunc("PUT /cob/{e2eid}/devolucao/{id}", createDevCtrl.Handle)
+	s.mux.HandleFunc("GET /cob/{e2eid}/devolucao/{id}", getDevCtrl.Handle)
 
 	return s
 }

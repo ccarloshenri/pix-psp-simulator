@@ -12,13 +12,15 @@ var ErrGeneric = errors.New("something went wrong")
 
 // MockCobRepository tracks calls and allows injection of controlled responses.
 type MockCobRepository struct {
-	SaveCalled  bool
-	SavedCob    models.Cob
-	SaveError   error
-	FindResult  *models.Cob
-	FindError   error
-	UpdateError error
-	DeleteError error
+	SaveCalled    bool
+	SavedCob      models.Cob
+	SaveError     error
+	FindResult    *models.Cob
+	FindError     error
+	FindAllResult []models.Cob
+	FindAllError  error
+	UpdateError   error
+	DeleteError   error
 }
 
 func (m *MockCobRepository) Save(cob models.Cob) error {
@@ -31,6 +33,10 @@ func (m *MockCobRepository) FindByTxID(_ string) (*models.Cob, error) {
 	return m.FindResult, m.FindError
 }
 
+func (m *MockCobRepository) FindAll(_ interfaces.CobFilters) ([]models.Cob, error) {
+	return m.FindAllResult, m.FindAllError
+}
+
 func (m *MockCobRepository) Update(cob models.Cob) error {
 	return m.UpdateError
 }
@@ -41,12 +47,14 @@ func (m *MockCobRepository) Delete(_ string) error {
 
 // MockCobVRepository tracks calls and allows injection of controlled responses.
 type MockCobVRepository struct {
-	SaveCalled  bool
-	SavedCobV   models.CobV
-	SaveError   error
-	FindResult  *models.CobV
-	FindError   error
-	UpdateError error
+	SaveCalled    bool
+	SavedCobV     models.CobV
+	SaveError     error
+	FindResult    *models.CobV
+	FindError     error
+	FindAllResult []models.CobV
+	FindAllError  error
+	UpdateError   error
 }
 
 func (m *MockCobVRepository) Save(cobv models.CobV) error {
@@ -57,6 +65,10 @@ func (m *MockCobVRepository) Save(cobv models.CobV) error {
 
 func (m *MockCobVRepository) FindByTxID(_ string) (*models.CobV, error) {
 	return m.FindResult, m.FindError
+}
+
+func (m *MockCobVRepository) FindAll(_ interfaces.CobVFilters) ([]models.CobV, error) {
+	return m.FindAllResult, m.FindAllError
 }
 
 func (m *MockCobVRepository) Update(_ models.CobV) error {
