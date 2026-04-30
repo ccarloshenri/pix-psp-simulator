@@ -2,11 +2,9 @@ package bo
 
 import (
 	"fmt"
-	"time"
 
 	"pix-psp-simulator/src/layers/main/enums"
 	"pix-psp-simulator/src/layers/main/interfaces"
-	"pix-psp-simulator/src/layers/main/models"
 )
 
 type SimulatePaymentInput struct {
@@ -16,23 +14,24 @@ type SimulatePaymentInput struct {
 }
 
 type SimulatePaymentOutput struct {
-	Pix models.Pix
+	EndToEndID string
+	TxID       string
 }
 
 type SimulatePaymentBO struct {
 	cobRepo  interfaces.CobRepository
 	cobvRepo interfaces.CobVRepository
-	pixRepo  interfaces.PixRepository
 	gen      interfaces.IDGenerator
+	queue    interfaces.PaymentQueue
 }
 
 func NewSimulatePaymentBO(
 	cobRepo interfaces.CobRepository,
 	cobvRepo interfaces.CobVRepository,
-	pixRepo interfaces.PixRepository,
 	gen interfaces.IDGenerator,
+	queue interfaces.PaymentQueue,
 ) *SimulatePaymentBO {
-	return &SimulatePaymentBO{cobRepo: cobRepo, cobvRepo: cobvRepo, pixRepo: pixRepo, gen: gen}
+	return &SimulatePaymentBO{cobRepo: cobRepo, cobvRepo: cobvRepo, gen: gen, queue: queue}
 }
 
 func (b *SimulatePaymentBO) Execute(input SimulatePaymentInput) (*SimulatePaymentOutput, error) {
@@ -43,41 +42,21 @@ func (b *SimulatePaymentBO) Execute(input SimulatePaymentInput) (*SimulatePaymen
 		return nil, fmt.Errorf("cobrança não encontrada para txid %s", input.TxID)
 	}
 
-	isCobV := cob == nil
+	if cob != nil && cob.Status != enums.CobStatusAtiva {
+		return nil, fmt.Errorf("cobrança não está ativa")
+	}
 
-	if !isCobV {
-		if cob.Status != enums.CobStatusAtiva {
-			return nil, fmt.Errorf("cobrança não está ativa")
-		}
-	} else {
-		if cobv.Status != enums.CobStatusAtiva {
-			return nil, fmt.Errorf("cobrança com vencimento não está ativa")
-		}
+	if cobv != nil && cob == nil && cobv.Status != enums.CobStatusAtiva {
+		return nil, fmt.Errorf("cobrança com vencimento não está ativa")
 	}
 
 	e2eid := b.gen.GenerateE2EID("60746948")
-	pix := models.Pix{
-		EndToEndID:  e2eid,
+	b.queue.Enqueue(interfaces.PaymentJob{
+		E2EID:       e2eid,
 		TxID:        input.TxID,
 		Valor:       input.Valor,
-		Horario:     time.Now().UTC(),
 		Infopagador: input.Infopagador,
-		Devolucoes:  []models.Devolucao{},
-	}
+	})
 
-	if err := b.pixRepo.Save(pix); err != nil {
-		return nil, fmt.Errorf("erro ao registrar pagamento: %w", err)
-	}
-
-	if !isCobV {
-		cob.Status = enums.CobStatusConcluida
-		cob.Pix = append(cob.Pix, pix)
-		b.cobRepo.Update(*cob)
-	} else {
-		cobv.Status = enums.CobStatusConcluida
-		cobv.Pix = append(cobv.Pix, pix)
-		b.cobvRepo.Update(*cobv)
-	}
-
-	return &SimulatePaymentOutput{Pix: pix}, nil
+	return &SimulatePaymentOutput{EndToEndID: e2eid, TxID: input.TxID}, nil
 }

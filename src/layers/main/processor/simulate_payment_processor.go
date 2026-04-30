@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"pix-psp-simulator/src/layers/main/bo"
-	"pix-psp-simulator/src/layers/main/models"
 )
 
 type SimulatePaymentRequest struct {
@@ -14,7 +13,8 @@ type SimulatePaymentRequest struct {
 }
 
 type SimulatePaymentResponse struct {
-	Pix models.Pix
+	EndToEndID string `json:"endToEndId"`
+	TxID       string `json:"txid"`
 }
 
 type SimulatePaymentProcessor struct {
@@ -41,5 +41,6 @@ func (p *SimulatePaymentProcessor) Process(req SimulatePaymentRequest) (*Simulat
 	if err != nil {
 		return nil, err
 	}
-	return &SimulatePaymentResponse{Pix: output.Pix}, nil
+
+	return &SimulatePaymentResponse{EndToEndID: output.EndToEndID, TxID: output.TxID}, nil
 }

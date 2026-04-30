@@ -27,5 +27,6 @@ func (c *SimulatePaymentController) Handle(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, resp.Pix)
+
+	writeJSON(w, http.StatusAccepted, resp)
 }
