@@ -10,12 +10,16 @@ import (
 )
 
 type CreateCobInput struct {
-	TxID           string
-	Chave          string
-	Expiracao      int
-	Valor          string
-	Devedor        *models.Devedor
-	InfoAdicionais []models.InfoAdicional
+	TxID                string
+	Chave               string
+	Expiracao           int
+	Valor               string
+	ModalidadeAlteracao int
+	Retirada            *models.Retirada
+	Devedor             *models.Devedor
+	LocID               int
+	SolicitacaoPagador  string
+	InfoAdicionais      []models.InfoAdicional
 }
 
 type CreateCobOutput struct {
@@ -44,23 +48,42 @@ func (b *CreateCobBO) Execute(input CreateCobInput) (*CreateCobOutput, error) {
 
 	expiracao := input.Expiracao
 	if expiracao <= 0 {
-		expiracao = 3600
+		expiracao = 86400
+	}
+
+	now := time.Now().UTC()
+
+	var loc *models.Loc
+	if input.LocID > 0 {
+		loc = &models.Loc{
+			ID:       input.LocID,
+			Location: fmt.Sprintf("pix.simulator/cobqrcode/%s", txid),
+			TipoCob:  "cob",
+			Criacao:  now,
+		}
 	}
 
 	cob := models.Cob{
 		TxID: txid,
 		Calendario: models.Calendario{
-			Criacao:   time.Now().UTC(),
+			Criacao:   now,
 			Expiracao: expiracao,
 		},
-		Status:         enums.CobStatusAtiva,
-		Chave:          input.Chave,
-		Devedor:        input.Devedor,
-		Valor:          models.CobValor{Original: input.Valor},
-		InfoAdicionais: input.InfoAdicionais,
-		Location:       fmt.Sprintf("pix.simulator/cobqrcode/%s", txid),
-		PixCopiaCola:   fmt.Sprintf("00020126580014br.gov.bcb.pix0136%s5204000053039865802BR5925Simulador PSP PIX6009SAO PAULO62290525%s6304", input.Chave, txid),
-		Pix:            []models.Pix{},
+		Revisao: 0,
+		Status:  enums.CobStatusAtiva,
+		Chave:   input.Chave,
+		Devedor: input.Devedor,
+		Loc:     loc,
+		Location: fmt.Sprintf("pix.simulator/cobqrcode/%s", txid),
+		Valor: models.CobValor{
+			Original:            input.Valor,
+			ModalidadeAlteracao: input.ModalidadeAlteracao,
+			Retirada:            input.Retirada,
+		},
+		PixCopiaECola:      fmt.Sprintf("00020126580014br.gov.bcb.pix0136%s5204000053039865802BR5925Simulador PSP PIX6009SAO PAULO62290525%s6304", input.Chave, txid),
+		SolicitacaoPagador: input.SolicitacaoPagador,
+		InfoAdicionais:     input.InfoAdicionais,
+		Pix:                []models.Pix{},
 	}
 
 	if err := b.repo.Save(cob); err != nil {

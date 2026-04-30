@@ -55,7 +55,7 @@ func TestCreateCobBO_DefaultExpiracao(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, 3600, result.Cob.Calendario.Expiracao)
+	assert.Equal(t, 86400, result.Cob.Calendario.Expiracao)
 }
 
 func TestCreateCobBO_DuplicateTxIDReturnsError(t *testing.T) {

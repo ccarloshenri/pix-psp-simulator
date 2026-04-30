@@ -37,6 +37,7 @@ func (b *UpdateCobBO) Execute(input UpdateCobInput) (*UpdateCobOutput, error) {
 	if input.Expiracao > 0 {
 		cob.Calendario.Expiracao = input.Expiracao
 	}
+	cob.Revisao++
 	if err := b.repo.Update(*cob); err != nil {
 		return nil, fmt.Errorf("erro ao atualizar cobrança: %w", err)
 	}
