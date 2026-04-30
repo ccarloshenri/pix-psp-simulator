@@ -1,0 +1,21 @@
+# Binaries
+*.exe
+*.out
+/pix-psp-simulator
+
+# Go test cache
+*.test
+*.prof
+
+# Environment
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
